@@ -1,5 +1,6 @@
 output "instance_id" {
-  value = aws_instance.this.id
+  description = "EC2 Instance ID"
+  value       = aws_instance.this.id
 }
 
 output "private_ip" {

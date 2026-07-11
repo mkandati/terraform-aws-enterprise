@@ -196,3 +196,26 @@ module "target_group" {
   common_tags           = local.common_tags
 }
 
+module "listener" {
+
+  source = "./modules/listener"
+
+  load_balancer_arn = module.alb.alb_arn
+  target_group_arn  = module.target_group.target_group_arn
+
+  port     = 80
+  protocol = "HTTP"
+
+  project_name = var.project_name
+  environment  = var.environment
+  common_tags  = local.common_tags
+}
+
+module "target_attachment" {
+
+  source           = "./modules/target-attachment"
+  target_group_arn = module.target_group.target_group_arn
+  target_id        = module.ec2.instance_id
+  port             = 80
+
+}

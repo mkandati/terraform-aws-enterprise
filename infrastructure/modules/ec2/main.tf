@@ -10,7 +10,9 @@ resource "aws_instance" "this" {
 
   iam_instance_profile        = var.iam_instance_profile
   associate_public_ip_address = false
-
+  user_data = file("${path.module}/user_data.sh")
+  user_data_replace_on_change = true
+  
   monitoring = var.enable_detailed_monitoring
 
   metadata_options {
