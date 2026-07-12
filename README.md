@@ -4,7 +4,7 @@
 
 ---
 
-## Project Overview
+##1. Project Overview
 
 This project demonstrates the design, deployment, and management of a highly available, secure, and scalable AWS infrastructure using **Terraform**. The implementation follows Infrastructure as Code (IaC) principles and adopts many of the architectural patterns commonly used in enterprise cloud environments.
 
