@@ -1,26 +1,25 @@
 # Terraform
-.terraform/
+**/.terraform/*
 *.tfstate
 *.tfstate.*
 crash.log
-crash.*.log
 override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
 
-# Variable files
-*.auto.tfvars
+# Local tfvars
 terraform.tfvars
 
-# Plans
+# Ignore plan files
 *.tfplan
-plan.out
 
-# Sensitive files
-*.pem
-*.key
+# IDE
+.vscode/
+.idea/
 
-# macOS / Windows
+# macOS
 .DS_Store
+
+# Windows
 Thumbs.db

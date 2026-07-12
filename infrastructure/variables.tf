@@ -1,4 +1,4 @@
-variable "region" {
+variable "aws_region" {
   description = "AWS Region"
   type        = string
   default     = "ap-south-1"
@@ -65,5 +65,10 @@ variable "enable_detailed_monitoring" {
 
 variable "ami_id" {
   description = "AMI ID"
+  type        = string
+}
+
+variable "notification_email" {
+  description = "Email address to receive CloudWatch alerts"
   type        = string
 }

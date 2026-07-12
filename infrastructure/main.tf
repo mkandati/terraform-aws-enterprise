@@ -115,7 +115,7 @@ module "iam" {
 
 }
 
-module "ec2" {
+/*module "ec2" {
 
   source = "./modules/ec2"
 
@@ -131,7 +131,7 @@ module "ec2" {
   project_name = var.project_name
   environment  = var.environment
   common_tags  = local.common_tags
-}
+}*/
 
 module "alb_security_group" {
 
@@ -211,11 +211,78 @@ module "listener" {
   common_tags  = local.common_tags
 }
 
-module "target_attachment" {
+/*module "target_attachment" {
 
   source           = "./modules/target-attachment"
   target_group_arn = module.target_group.target_group_arn
   target_id        = module.ec2.instance_id
   port             = 80
 
+}*/
+
+module "launch_template" {
+
+  source = "./modules/launch-template"
+
+  security_group_id    = module.ec2_security_group.security_group_id
+  iam_instance_profile = module.iam.instance_profile_name
+
+  instance_type              = var.instance_type
+  root_volume_size           = var.root_volume_size
+  enable_detailed_monitoring = var.enable_detailed_monitoring
+
+  project_name = var.project_name
+  environment  = var.environment
+  common_tags  = local.common_tags
+}
+
+module "autoscaling" {
+
+  source = "./modules/autoscaling"
+
+  launch_template_id      = module.launch_template.launch_template_id
+  launch_template_version = module.launch_template.launch_template_latest_version
+
+  private_subnet_ids = module.subnet.private_subnet_ids
+  target_group_arn   = module.target_group.target_group_arn
+
+  min_size         = 2
+  desired_capacity = 2
+  max_size         = 4
+
+  project_name = var.project_name
+  environment  = var.environment
+  common_tags  = local.common_tags
+}
+
+module "cloudwatch" {
+
+  source                  = "./modules/cloudwatch"
+  project_name            = var.project_name
+  environment             = var.environment
+  aws_region              = var.aws_region
+  log_retention_days      = 7
+  alb_arn_suffix          = module.alb.alb_arn_suffix
+  target_group_arn_suffix = module.target_group.target_group_arn_suffix
+  autoscaling_group_name  = module.autoscaling.autoscaling_group_name
+  sns_topic_arn           = module.sns.sns_topic_arn
+  common_tags             = local.common_tags
+}
+
+module "sns" {
+
+  source             = "./modules/sns"
+  project_name       = var.project_name
+  environment        = var.environment
+  notification_email = var.notification_email
+  common_tags        = local.common_tags
+}
+
+module "waf" {
+
+  source       = "./modules/waf"
+  alb_arn      = module.alb.alb_arn
+  project_name = var.project_name
+  environment  = var.environment
+  common_tags  = local.common_tags
 }
