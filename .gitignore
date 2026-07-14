@@ -8,11 +8,8 @@ override.tf.json
 *_override.tf
 *_override.tf.json
 
-# Local tfvars
-terraform.tfvars
-
 # Ignore plan files
-*.tfplan
+#*.tfplan
 
 # IDE
 .vscode/
