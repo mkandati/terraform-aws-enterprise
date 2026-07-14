@@ -118,7 +118,7 @@ pipeline {
                             -input=false \
                             -var-file=../environments/${ENVIRONMENT}/terraform.tfvars \
                             -out=$(TF_PLAN)
-                            cp ${TF_PLAN} infrastructure/artifacts/plans/
+                            cp ${TF_PLAN} artifacts/plans/
                     '''
                 }
             }
@@ -132,7 +132,7 @@ pipeline {
             steps {
                 echo "Archiving Terraform execution plan..."
                 archiveArtifacts(
-                    artifacts: 'infrastructure/artifacts/**',
+                    artifacts: 'artifacts/plans/$(TF_PLAN)',
                     fingerprint: true
                 )
             }
