@@ -12,7 +12,7 @@ pipeline {
 
     environment {
         TF_ROOT          = 'infrastructure'
-        TF_PLAN          = 'tfplan'
+        TF_PLAN          = 'tfplan-${ENVIRONMENT}-build${BUILD_NUMBER}'
         AWS_ACCESS_KEY_ID     = credentials('AWS_ACCESS_KEY_ID')
         AWS_SECRET_ACCESS_KEY = credentials('AWS_SECRET_ACCESS_KEY')
         TF_IN_AUTOMATION = 'true'
@@ -117,7 +117,8 @@ pipeline {
                         terraform plan \
                             -input=false \
                             -var-file=../environments/${ENVIRONMENT}/terraform.tfvars \
-                            -out=tfplan
+                            -out=$(TF_PLAN)
+                            cp ${TF_PLAN} infrastructure/artifacts/plans/
                     '''
                 }
             }
@@ -131,7 +132,7 @@ pipeline {
             steps {
                 echo "Archiving Terraform execution plan..."
                 archiveArtifacts(
-                    artifacts: 'infrastructure/tfplan',
+                    artifacts: 'infrastructure/artifacts/**',
                     fingerprint: true
                 )
             }
