@@ -148,7 +148,10 @@ Terraform Validation Pipeline Successful
 ========================================
 '''
 
-            cleanWs()
+            cleanWs(
+                deleteDirs: true,
+                disableDeferredWipeout: true
+            )
 
         }
 
