@@ -13,7 +13,10 @@ pipeline {
     environment {
         TF_ROOT          = 'infrastructure'
         TF_PLAN          = 'tfplan'
+        AWS_ACCESS_KEY_ID     = credentials('AWS_ACCESS_KEY_ID')
+        AWS_SECRET_ACCESS_KEY = credentials('AWS_SECRET_ACCESS_KEY')
         TF_IN_AUTOMATION = 'true'
+        AWS_DEFAULT_REGION = 'ap-south-1'   // or your region
     }
 
     options {
