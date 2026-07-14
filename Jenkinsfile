@@ -91,6 +91,26 @@ pipeline {
             steps {
                 dir("${TF_ROOT}") {
                     sh '''
+                    echo "===== Current Directory ====="
+                    pwd
+                    
+                    echo "========Files========"
+                    ls -la
+
+                    echo "===== Terraform Files ====="
+                    ls -la *.tf*
+
+                    echo "===== tfvars ====="
+                    cat terraform.tfvars
+                    
+                    echo ""
+                    echo "===== Environment ====="
+                    echo "TF_ROOT=$TF_ROOT"
+                    echo "AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION"
+                    echo "AWS_ACCESS_KEY_ID is ${AWS_ACCESS_KEY_ID:+SET}"
+                    echo "AWS_SECRET_ACCESS_KEY is ${AWS_SECRET_ACCESS_KEY:+SET}"
+                    echo ""
+                    
                         echo "Generating Terraform execution plan..."
 
                         terraform plan \
