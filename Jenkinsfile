@@ -5,8 +5,8 @@ pipeline {
     parameters {
         choice(
             name: 'ENVIRONMENT',
-            choices: ['dev'],
-            description: 'Target deployment environment'
+            choices: ['dev', 'test', 'prod'],
+            description: 'Select deployment environment'
         )
     }
 
@@ -115,6 +115,7 @@ pipeline {
 
                         terraform plan \
                             -input=false \
+                            -var-file=../environments/${ENVIRONMENT}/terraform.tfvars \
                             -out=tfplan
                     '''
                 }
