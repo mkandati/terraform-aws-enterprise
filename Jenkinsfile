@@ -21,35 +21,56 @@ pipeline {
 
     options {
         timestamps()
+        timeout(time: 30, unit: 'MINUTES')
         disableConcurrentBuilds()
-        buildDiscarder(logRotator(numToKeepStr: '10'))
+        buildDiscarder(logRotator(numToKeepStr: '10', artifactNumToKeepStr: '10'))
         ansiColor('xterm')
     }
 
     stages {
-
         stage('Checkout Source') {
             steps {
                 checkout scm
             }
         }
 
+        stage('Build Information') {
+            steps {
+                script {
+                    currentBuild.displayName = "#${env.BUILD_NUMBER} ${params.ENVIRONMENT.toUpperCase()} - PLAN"
+                    currentBuild.description = "Terraform validation for ${params.ENVIRONMENT}"
+                    "Terraform validation for ${params.ENVIRONMENT}"
+                }
+
+                sh """
+                echo "==============================================="
+                echo " Terraform Enterprise Validation Pipeline"
+                echo "==============================================="
+                echo " Build Number : ${BUILD_NUMBER}"
+                echo " Environment  : ${ENVIRONMENT}"
+                echo " Branch       : ${BRANCH_NAME}"
+                echo " Workspace    : ${WORKSPACE}"
+                echo "==============================================="
+                """
+            }
+        }
+
         stage('Terraform Version') {
             steps {
                 sh '''
-                    echo "========================================"
-                    echo "Terraform Version"
-                    echo "========================================"
+                echo "========================================"
+                echo "Terraform Version"
+                echo "========================================"
 
-                    terraform version
+                terraform version
 
-                    echo ""
-                    echo "Current Workspace:"
-                    pwd
+                echo ""
+                echo "Current Workspace:"
+                pwd
 
-                    echo ""
-                    echo "Repository Contents:"
-                    ls -la
+                echo ""
+                echo "Repository Contents:"
+                ls -la
                 '''
             }
         }
@@ -58,8 +79,8 @@ pipeline {
             steps {
                 dir("${TF_ROOT}") {
                     sh '''
-                        echo "Checking Terraform formatting..."
-                        terraform fmt -check -recursive
+                    echo "Checking Terraform formatting..."
+                    terraform fmt -check -recursive
                     '''
                 }
             }
