@@ -128,16 +128,14 @@ pipeline {
                 expression { currentBuild.currentResult == 'SUCCESS' }
             }
 
-        steps {
-            echo "Archiving Terraform execution plan..."
-            archiveArtifacts(
-                artifacts: 'infrastructure/tfplan',
-                fingerprint: true
-            )
+            steps {
+                echo "Archiving Terraform execution plan..."
+                archiveArtifacts(
+                    artifacts: 'infrastructure/tfplan',
+                    fingerprint: true
+                )
+            }
         }
-        }
-    }
-
     }
 
     post {
