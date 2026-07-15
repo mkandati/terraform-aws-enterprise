@@ -405,6 +405,11 @@ pipeline {
                     echo "Selected Environment : ${ENVIRONMENT}"
                     echo
 
+                    pwd
+                    echo
+                    echo "Repository structure:"
+                    find .. -maxdepth 3 -name "backend.tf"
+
                     echo "Backend Configuration:"
                     cat backend.tf
 
