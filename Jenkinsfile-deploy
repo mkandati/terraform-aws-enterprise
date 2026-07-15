@@ -76,6 +76,56 @@ pipeline {
             }
         }
 
+        stage('Deployment Decision') {
+            steps {
+                script {
+                echo """
+                ==================================================
+                Terraform Enterprise Deployment Decision
+                ==================================================
+
+                Action             : ${params.ACTION}
+                Environment        : ${params.ENVIRONMENT}
+                Deployment Build   : ${env.BUILD_NUMBER}
+                Job Name           : ${env.JOB_NAME}
+
+                ==================================================
+                    """
+                    if (params.ACTION == 'APPLY') {
+                        echo """
+                        Selected Operation : APPLY
+                        Validation Build   : ${params.VALIDATION_BUILD}
+
+                        This deployment will:
+
+                        ✓ Retrieve the approved deployment package
+                        ✓ Verify package integrity
+                        ✓ Verify environment
+                        ✓ Verify Terraform version
+                        ✓ Wait for manual approval
+                        ✓ Apply the approved Terraform plan
+
+                        ==================================================
+                    """
+                    } else {
+
+                    echo """
+                        Selected Operation : DESTROY
+
+                        This deployment will:
+
+                        ✓ Initialize Terraform
+                        ✓ Wait for destroy approval
+                        ✓ Destroy Terraform-managed infrastructure
+                        ✓ Generate destroy report
+
+                        ==================================================
+                    """
+                    }
+                }
+            }
+        }
+
         stage('Retrieve Approved Deployment Package') {
             when {
                 expression {
@@ -271,6 +321,52 @@ pipeline {
                         ok: 'Approve Deployment'
                     )
                     echo "Deployment approved by operator."
+                }
+            }
+        }
+
+        stage('Destroy Approval') {
+            when {
+                expression {
+                params.ACTION == 'DESTROY'
+                }
+            }
+            steps {
+                script {
+                    input(
+                    message: """
+
+                    ==================================================
+                    Terraform Enterprise DESTROY Approval
+
+                    Environment        : ${ENVIRONMENT}
+                    Deployment Build   : ${BUILD_NUMBER}
+                    Job                : ${JOB_NAME}
+                    ==================================================
+
+                    WARNING
+
+                    This action will permanently destroy ALL
+                    Terraform-managed infrastructure for the
+                    '${ENVIRONMENT}' environment.
+
+                    This operation CANNOT be undone.
+                    ==================================================
+
+                    Have you verified that:
+
+                    ✓ This is the correct environment
+                    ✓ Resources are no longer required
+                    ✓ State file is correct
+                    ==================================================
+
+                    Proceed with DESTROY?
+
+                    """,
+                    ok: "Destroy Infrastructure"
+                    )
+
+                echo "Destroy operation approved by operator."
                 }
             }
         }
