@@ -93,7 +93,33 @@ pipeline {
                 '''
             }
         }
-        
+
+    stage('Verify Deployment Package Integrity') {
+        steps {
+            dir("${TF_ROOT}") {
+                sh '''
+                echo "======================================="
+                echo "Verifying Deployment Package Integrity"
+                echo "======================================="
+
+                echo
+                echo "Stored checksum:"
+                cat artifacts/checksum/SHA256SUM
+
+                echo
+                echo "Running SHA256 verification..."
+
+                sha256sum --check artifacts/checksum/SHA256SUM
+
+                echo
+                echo "======================================="
+                echo "Checksum validation PASSED"
+                echo "======================================="
+                '''
+            }
+        }
+    }
+
         stage('Manual Approval') {
             steps {
                 echo "Will implement next..."
