@@ -120,6 +120,40 @@ pipeline {
         }
     }
 
+    stage('Verify Deployment Environment') {
+        steps {
+            dir("${TF_ROOT}") {
+
+                sh '''
+                echo "======================================="
+                echo "Verifying Deployment Environment"
+                echo "======================================="
+
+                echo
+                echo "Requested Environment : ${ENVIRONMENT}"
+
+                PACKAGE_ENV=$(grep "^Environment" artifacts/metadata/environment.txt | awk -F':' '{print $2}' | xargs)
+
+                echo "Deployment Package Environment : ${PACKAGE_ENV}"
+
+                if [ "${ENVIRONMENT}" != "${PACKAGE_ENV}" ]; then
+
+                    echo
+                    echo "ERROR: Environment validation FAILED"
+                    echo "Deployment package was generated for '${PACKAGE_ENV}'"
+                    echo "Selected deployment environment is '${ENVIRONMENT}'"
+                    exit 1
+                fi
+
+                echo
+                echo "======================================="
+                echo "Environment validation PASSED"
+                echo "======================================="
+                '''
+            }
+        }
+    }
+
         stage('Manual Approval') {
             steps {
                 echo "Will implement next..."
