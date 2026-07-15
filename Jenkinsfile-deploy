@@ -154,6 +154,46 @@ pipeline {
         }
     }
 
+    stage('Verify Terraform Version') {
+        steps {
+            dir("${TF_ROOT}") {
+                sh '''
+                echo "======================================="
+                echo "Verifying Terraform Version"
+                echo "======================================="
+
+                echo
+                echo "Terraform version used during validation:"
+                cat artifacts/metadata/terraform-version.txt
+
+                echo
+                echo "Terraform version on deployment server:"
+                terraform version
+
+                PACKAGE_VERSION=$(grep "Terraform v" artifacts/metadata/terraform-version.txt | head -1 | awk '{print $2}')
+                DEPLOY_VERSION=$(terraform version | head -1 | awk '{print $2}')
+
+                echo
+                echo "Validation Version : ${PACKAGE_VERSION}"
+                echo "Deployment Version : ${DEPLOY_VERSION}"
+
+                if [ "${PACKAGE_VERSION}" != "${DEPLOY_VERSION}" ]; then
+                    echo
+                    echo "ERROR: Terraform version validation FAILED"
+                    echo "Validation package created with ${PACKAGE_VERSION}"
+                    echo "Deployment server is using ${DEPLOY_VERSION}"
+                    exit 1
+                fi
+
+                echo
+                echo "======================================="
+                echo "Terraform version validation PASSED"
+                echo "======================================="
+                '''
+            }
+        }
+    }
+
         stage('Manual Approval') {
             steps {
                 echo "Will implement next..."
