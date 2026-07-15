@@ -410,8 +410,13 @@ pipeline {
                     echo "Repository structure:"
                     find .. -maxdepth 3 -name "backend.tf"
 
-                    echo "Backend Configuration:"
-                    cat backend.tf
+                    echo
+                    echo "Backend Configuration"
+                    echo "--------------------------------------"
+
+                    grep "bucket" ../environments/${ENVIRONMENT}/backend.tf
+                    grep "key" ../environments/${ENVIRONMENT}/backend.tf
+                    grep "region" ../environments/${ENVIRONMENT}/backend.tf
 
                     echo
                     echo "Current Terraform State:"
