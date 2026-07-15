@@ -387,6 +387,40 @@ pipeline {
             }
         }
 
+        stage('Verify Terraform Backend') {
+            when {
+                expression {
+                params.ACTION == 'DESTROY'
+                }
+            }
+
+            steps {
+                dir("${TF_ROOT}") {
+                    sh '''
+                    echo "======================================="
+                    echo "Terraform Backend Verification"
+                    echo "======================================="
+
+                    echo
+                    echo "Selected Environment : ${ENVIRONMENT}"
+                    echo
+
+                    echo "Backend Configuration:"
+                    cat backend.tf
+
+                    echo
+                    echo "Current Terraform State:"
+                    terraform state list || true
+
+                    echo
+                    echo "======================================="
+                    echo "Backend verification completed."
+                    echo "======================================="
+                    '''
+                }
+            }
+        }
+
         stage('Verify Terraform Plan') {
             when {
                 expression {
