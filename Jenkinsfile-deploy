@@ -194,11 +194,33 @@ pipeline {
         }
     }
 
-        stage('Manual Approval') {
-            steps {
-                echo "Will implement next..."
+    stage('Manual Approval') {
+        steps {
+            script {
+                input(
+                    id: 'TerraformApproval',
+                    message: """
+                    ==================================================
+                    Terraform Enterprise Deployment Approval
+
+                    Environment        : ${params.ENVIRONMENT}
+                    Validation Build   : ${params.VALIDATION_BUILD}
+                    Deployment Build   : ${env.BUILD_NUMBER}
+                    Job                : ${env.JOB_NAME}
+                    Terraform Plan     : ${env.TF_PLAN}
+                    ==================================================
+
+                    Have you reviewed the Terraform plan?
+                    Do you approve deployment?
+
+                    ==================================================
+                    """,
+                    ok: 'Approve Deployment'
+                )
+                echo "Deployment approved by operator."
             }
         }
+    }
 
         stage('Terraform Apply') {
             steps {
