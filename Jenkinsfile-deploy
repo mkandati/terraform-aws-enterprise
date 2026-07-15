@@ -250,11 +250,24 @@ pipeline {
         }
     }
 
-        stage('Terraform Apply') {
-            steps {
-                echo "Will implement next..."
+    stage('Verify Terraform Plan') {
+        steps {
+            dir("${TF_ROOT}") {
+                sh '''
+                echo "======================================="
+                echo "Verifying Approved Terraform Plan"
+                echo "======================================="
+
+                ls -lh artifacts/plans/
+
+                terraform show artifacts/plans/${TF_PLAN} > /dev/null
+
+                echo
+                echo "Terraform plan verification PASSED"
+                '''
             }
         }
+    }
 
         stage('Generate Deployment Report') {
             steps {
