@@ -125,6 +125,41 @@ pipeline {
             }
         }
 
+        stage('Generate Build Metadata') {
+            steps {
+                dir("${TF_ROOT}") {
+                sh '''
+                mkdir -p artifacts/metadata
+                mkdir -p artifacts/checksum
+
+                echo "===================================" > artifacts/metadata/build-info.txt
+                echo "Terraform Enterprise Build" >> artifacts/metadata/build-info.txt
+                echo "===================================" >> artifacts/metadata/build-info.txt
+                echo "Build Number : ${BUILD_NUMBER}" >> artifacts/metadata/build-info.txt
+                echo "Job Name     : ${JOB_NAME}" >> artifacts/metadata/build-info.txt
+                echo "Environment  : ${ENVIRONMENT}" >> artifacts/metadata/build-info.txt
+                echo "Workspace    : ${WORKSPACE}" >> artifacts/metadata/build-info.txt
+                echo "Build URL    : ${BUILD_URL}" >> artifacts/metadata/build-info.txt
+
+                echo "Repository Information" > artifacts/metadata/git-info.txt
+                echo "Branch    : $(git rev-parse --abbrev-ref HEAD)" >> artifacts/metadata/git-info.txt
+                echo "Commit ID : $(git rev-parse HEAD)" >> artifacts/metadata/git-info.txt
+                echo "Commit    : $(git log -1 --pretty=%s)" >> artifacts/metadata/git-info.txt
+                echo "Author    : $(git log -1 --pretty=%an)" >> artifacts/metadata/git-info.txt
+
+                terraform version > artifacts/metadata/terraform-version.txt
+
+                echo "Environment : ${ENVIRONMENT}" > artifacts/metadata/environment.txt
+                echo "Terraform Root : ${TF_ROOT}" >> artifacts/metadata/environment.txt
+                echo "Plan File : ${TF_PLAN}" >> artifacts/metadata/environment.txt
+
+                terraform show ${TF_PLAN} > artifacts/metadata/plan-summary.txt
+                sha256sum ${TF_PLAN} > artifacts/checksum/SHA256SUM
+                '''
+            }
+        }
+    }
+
         stage('Archive Terraform Plan') {
             when {
                 expression { currentBuild.currentResult == 'SUCCESS' }
