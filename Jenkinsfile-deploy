@@ -482,6 +482,36 @@ pipeline {
             }
         }
 
+        stage('Terraform Destroy') {
+            when {
+                expression {
+                params.ACTION == 'DESTROY'
+                }
+            }
+            steps {
+                dir("${TF_ROOT}") {
+
+                sh '''
+                set -e
+                set -o pipefail
+
+                mkdir -p artifacts/deployment
+
+                echo "======================================="
+                echo "Destroying Terraform Infrastructure"
+                echo "Environment : ${ENVIRONMENT}"
+                echo "======================================="
+
+                terraform destroy \
+                    -input=false \
+                    -auto-approve \
+                    -var-file=../environments/${ENVIRONMENT}/terraform.tfvars \
+                | tee artifacts/deployment/destroy.log
+                '''
+                }
+            }
+        }
+
         stage('Generate Deployment Report') {
             when {
                 expression {
