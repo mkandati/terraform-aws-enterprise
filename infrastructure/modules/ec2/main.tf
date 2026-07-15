@@ -9,7 +9,7 @@ resource "aws_instance" "this" {
   ]
 
   iam_instance_profile        = var.iam_instance_profile
-  associate_public_ip_address = false
+  associate_public_ip_address = true
   user_data                   = file("${path.module}/user_data.sh")
   user_data_replace_on_change = true
 
@@ -31,7 +31,7 @@ resource "aws_instance" "this" {
   tags = merge(
     var.common_tags,
     {
-      Name = "${var.project_name}-${var.environment}-private-ec2"
+      Name = "${var.project_name}-${var.environment}-web-ec2"
     }
   )
 }

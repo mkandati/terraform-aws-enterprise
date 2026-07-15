@@ -82,6 +82,20 @@ pipeline {
             }
         }
 
+        stage('Discover Deployment Package') {
+            steps {
+                dir("${TF_ROOT}") {
+                    script {
+                    env.TF_PLAN = sh(
+                    script: "basename artifacts/plans/*",
+                    returnStdout: true
+                    ).trim()
+                    echo "Deployment Plan : ${env.TF_PLAN}"
+                    }
+                }
+            }
+        }
+
         stage('Verify Downloaded Artifacts') {
             steps {
                 sh '''
@@ -133,11 +147,9 @@ pipeline {
                 echo "Requested Environment : ${ENVIRONMENT}"
 
                 PACKAGE_ENV=$(grep "^Environment" artifacts/metadata/environment.txt | awk -F':' '{print $2}' | xargs)
-
                 echo "Deployment Package Environment : ${PACKAGE_ENV}"
 
                 if [ "${ENVIRONMENT}" != "${PACKAGE_ENV}" ]; then
-
                     echo
                     echo "ERROR: Environment validation FAILED"
                     echo "Deployment package was generated for '${PACKAGE_ENV}'"

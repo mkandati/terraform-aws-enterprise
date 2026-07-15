@@ -41,7 +41,7 @@ module "public_route_table" {
 
 }
 
-module "nat_gateway" {
+/*module "nat_gateway" {
 
   source           = "./modules/nat-gateway"
   public_subnet_id = module.subnet.public_subnet_ids[0]
@@ -49,9 +49,9 @@ module "nat_gateway" {
   environment      = var.environment
   common_tags      = local.common_tags
 
-}
+}*/
 
-module "private_route_table" {
+/*module "private_route_table" {
 
   source             = "./modules/private-route-table"
   vpc_id             = module.vpc.vpc_id
@@ -61,7 +61,7 @@ module "private_route_table" {
   environment        = var.environment
   common_tags        = local.common_tags
 
-}
+}*/
 
 module "ec2_security_group" {
 
@@ -115,11 +115,12 @@ module "iam" {
 
 }
 
-/*module "ec2" {
+module "ec2" {
 
   source = "./modules/ec2"
 
-  subnet_id            = module.subnet.private_subnet_ids[0]
+  #subnet_id            = module.subnet.private_subnet_ids[0]
+  subnet_id            = module.subnet.public_subnet_ids[0]
   security_group_id    = module.ec2_security_group.security_group_id
   iam_instance_profile = module.iam.instance_profile_name
 
@@ -131,9 +132,9 @@ module "iam" {
   project_name = var.project_name
   environment  = var.environment
   common_tags  = local.common_tags
-}*/
+}
 
-module "alb_security_group" {
+/*module "alb_security_group" {
 
   source                     = "./modules/security-group"
   security_group_name        = "alb-sg"
@@ -164,9 +165,9 @@ module "alb_security_group" {
   environment  = var.environment
   common_tags  = local.common_tags
 
-}
+}*/
 
-module "alb" {
+/*module "alb" {
 
   source              = "./modules/alb"
   project_name        = var.project_name
@@ -179,9 +180,9 @@ module "alb" {
   idle_timeout        = 60
   common_tags         = local.common_tags
 
-}
+}*/
 
-module "target_group" {
+/*module "target_group" {
 
   source                = "./modules/target-group"
   project_name          = var.project_name
@@ -194,9 +195,9 @@ module "target_group" {
   health_check_protocol = "HTTP"
   health_check_matcher  = "200"
   common_tags           = local.common_tags
-}
+}*/
 
-module "listener" {
+/*module "listener" {
 
   source = "./modules/listener"
 
@@ -209,7 +210,7 @@ module "listener" {
   project_name = var.project_name
   environment  = var.environment
   common_tags  = local.common_tags
-}
+}*/
 
 /*module "target_attachment" {
 
@@ -220,7 +221,7 @@ module "listener" {
 
 }*/
 
-module "launch_template" {
+/*module "launch_template" {
 
   source = "./modules/launch-template"
 
@@ -234,9 +235,9 @@ module "launch_template" {
   project_name = var.project_name
   environment  = var.environment
   common_tags  = local.common_tags
-}
+}*/
 
-module "autoscaling" {
+/*module "autoscaling" {
 
   source = "./modules/autoscaling"
 
@@ -253,9 +254,9 @@ module "autoscaling" {
   project_name = var.project_name
   environment  = var.environment
   common_tags  = local.common_tags
-}
+}*/
 
-module "cloudwatch" {
+/*module "cloudwatch" {
 
   source                  = "./modules/cloudwatch"
   project_name            = var.project_name
@@ -267,22 +268,22 @@ module "cloudwatch" {
   autoscaling_group_name  = module.autoscaling.autoscaling_group_name
   sns_topic_arn           = module.sns.sns_topic_arn
   common_tags             = local.common_tags
-}
+}*/
 
-module "sns" {
+/*module "sns" {
 
   source             = "./modules/sns"
   project_name       = var.project_name
   environment        = var.environment
   notification_email = var.notification_email
   common_tags        = local.common_tags
-}
+}*/
 
-module "waf" {
+/*module "waf" {
 
   source       = "./modules/waf"
   alb_arn      = module.alb.alb_arn
   project_name = var.project_name
   environment  = var.environment
   common_tags  = local.common_tags
-}
+}*/
