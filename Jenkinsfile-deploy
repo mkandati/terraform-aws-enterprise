@@ -292,6 +292,11 @@ pipeline {
         }
 
         stage('Verify Terraform Plan') {
+            when {
+                expression {
+                    params.ACTION == 'APPLY'
+                }
+            }
             steps {
                 dir("${TF_ROOT}") {
                     sh '''
@@ -311,6 +316,11 @@ pipeline {
         }
 
         stage('Terraform Apply') {
+            when {
+                expression {
+                    params.ACTION == 'APPLY'
+                }
+            }
             steps {
                 dir("${TF_ROOT}") {
                     sh '''
@@ -331,6 +341,11 @@ pipeline {
         }
 
         stage('Generate Deployment Report') {
+            when {
+                expression {
+                    params.ACTION == 'APPLY'
+                }
+            }
             steps {
                 dir("${TF_ROOT}") {
                     sh '''
@@ -369,11 +384,10 @@ pipeline {
                 }
             }
         }
-
+    }
     post {
         always {
                 cleanWs()
         }
-    }
     }
 }
