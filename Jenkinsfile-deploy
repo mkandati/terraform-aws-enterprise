@@ -17,6 +17,12 @@ pipeline {
     parameters {
 
         choice(
+            name: 'ACTION',
+            choices: ['APPLY', 'DESTROY'],
+            description: 'Terraform Operation'
+        )
+             
+        choice(
             name: 'ENVIRONMENT',
             choices: ['dev', 'test', 'prod'],
             description: 'Select deployment environment'
@@ -71,6 +77,11 @@ pipeline {
         }
 
         stage('Retrieve Approved Deployment Package') {
+            when {
+                expression {
+                params.ACTION == 'APPLY'
+                }
+            }
             steps {
                 echo "Copying artifacts from Validation Build #${VALIDATION_BUILD}"
                 copyArtifacts(
@@ -83,6 +94,11 @@ pipeline {
         }
 
         stage('Discover Deployment Package') {
+            when {
+                expression {
+                params.ACTION == 'APPLY'
+                }
+            }
             steps {
                 dir("${TF_ROOT}") {
                     script {
@@ -97,6 +113,11 @@ pipeline {
         }
 
         stage('Verify Downloaded Artifacts') {
+            when {
+                expression {
+                params.ACTION == 'APPLY'
+                }
+            }
             steps {
                 sh '''
                 echo "========================================"
@@ -108,226 +129,246 @@ pipeline {
             }
         }
 
-    stage('Verify Deployment Package Integrity') {
-        steps {
-            dir("${TF_ROOT}") {
-                sh '''
-                echo "======================================="
-                echo "Verifying Deployment Package Integrity"
-                echo "======================================="
-
-                echo
-                echo "Stored checksum:"
-                cat artifacts/checksum/SHA256SUM
-
-                echo
-                echo "Running SHA256 verification..."
-
-                sha256sum --check artifacts/checksum/SHA256SUM
-
-                echo
-                echo "======================================="
-                echo "Checksum validation PASSED"
-                echo "======================================="
-                '''
+        stage('Verify Deployment Package Integrity') {
+            when {
+                expression {
+                params.ACTION == 'APPLY'
+                }
             }
-        }
-    }
+            steps {
+                dir("${TF_ROOT}") {
+                    sh '''
+                    echo "======================================="
+                    echo "Verifying Deployment Package Integrity"
+                    echo "======================================="
 
-    stage('Verify Deployment Environment') {
-        steps {
-            dir("${TF_ROOT}") {
-
-                sh '''
-                echo "======================================="
-                echo "Verifying Deployment Environment"
-                echo "======================================="
-
-                echo
-                echo "Requested Environment : ${ENVIRONMENT}"
-
-                PACKAGE_ENV=$(grep "^Environment" artifacts/metadata/environment.txt | awk -F':' '{print $2}' | xargs)
-                echo "Deployment Package Environment : ${PACKAGE_ENV}"
-
-                if [ "${ENVIRONMENT}" != "${PACKAGE_ENV}" ]; then
                     echo
-                    echo "ERROR: Environment validation FAILED"
-                    echo "Deployment package was generated for '${PACKAGE_ENV}'"
-                    echo "Selected deployment environment is '${ENVIRONMENT}'"
-                    exit 1
-                fi
+                    echo "Stored checksum:"
+                    cat artifacts/checksum/SHA256SUM
 
-                echo
-                echo "======================================="
-                echo "Environment validation PASSED"
-                echo "======================================="
-                '''
-            }
-        }
-    }
-
-    stage('Verify Terraform Version') {
-        steps {
-            dir("${TF_ROOT}") {
-                sh '''
-                echo "======================================="
-                echo "Verifying Terraform Version"
-                echo "======================================="
-
-                echo
-                echo "Terraform version used during validation:"
-                cat artifacts/metadata/terraform-version.txt
-
-                echo
-                echo "Terraform version on deployment server:"
-                terraform version
-
-                PACKAGE_VERSION=$(grep "Terraform v" artifacts/metadata/terraform-version.txt | head -1 | awk '{print $2}')
-                DEPLOY_VERSION=$(terraform version | head -1 | awk '{print $2}')
-
-                echo
-                echo "Validation Version : ${PACKAGE_VERSION}"
-                echo "Deployment Version : ${DEPLOY_VERSION}"
-
-                if [ "${PACKAGE_VERSION}" != "${DEPLOY_VERSION}" ]; then
                     echo
-                    echo "ERROR: Terraform version validation FAILED"
-                    echo "Validation package created with ${PACKAGE_VERSION}"
-                    echo "Deployment server is using ${DEPLOY_VERSION}"
-                    exit 1
-                fi
+                    echo "Running SHA256 verification..."
 
-                echo
-                echo "======================================="
-                echo "Terraform version validation PASSED"
-                echo "======================================="
-                '''
+                    sha256sum --check artifacts/checksum/SHA256SUM
+
+                    echo
+                    echo "======================================="
+                    echo "Checksum validation PASSED"
+                    echo "======================================="
+                    '''
+                }
             }
         }
-    }
 
-    stage('Manual Approval') {
-        steps {
-            script {
-                input(
-                    id: 'TerraformApproval',
-                    message: """
-                    ==================================================
-                    Terraform Enterprise Deployment Approval
+        stage('Verify Deployment Environment') {
+            when {
+                expression {
+                    params.ACTION == 'APPLY'
+                }
+            }
+            steps {
+                dir("${TF_ROOT}") {
 
-                    Environment        : ${params.ENVIRONMENT}
-                    Validation Build   : ${params.VALIDATION_BUILD}
-                    Deployment Build   : ${env.BUILD_NUMBER}
-                    Job                : ${env.JOB_NAME}
-                    Terraform Plan     : ${env.TF_PLAN}
-                    ==================================================
+                    sh '''
+                    echo "======================================="
+                    echo "Verifying Deployment Environment"
+                    echo "======================================="
 
-                    Have you reviewed the Terraform plan?
-                    Do you approve deployment?
+                    echo
+                    echo "Requested Environment : ${ENVIRONMENT}"
 
-                    ==================================================
-                    """,
-                    ok: 'Approve Deployment'
-                )
-                echo "Deployment approved by operator."
+                    PACKAGE_ENV=$(grep "^Environment" artifacts/metadata/environment.txt | awk -F':' '{print $2}' | xargs)
+                    echo "Deployment Package Environment : ${PACKAGE_ENV}"
+
+                    if [ "${ENVIRONMENT}" != "${PACKAGE_ENV}" ]; then
+                        echo
+                        echo "ERROR: Environment validation FAILED"
+                        echo "Deployment package was generated for '${PACKAGE_ENV}'"
+                        echo "Selected deployment environment is '${ENVIRONMENT}'"
+                        exit 1
+                    fi
+
+                    echo
+                    echo "======================================="
+                    echo "Environment validation PASSED"
+                    echo "======================================="
+                    '''
+                }
             }
         }
-    }
 
-    stage('Terraform Init') {
-        steps {
-            dir("${TF_ROOT}") {
-                sh '''
-                echo "======================================="
-                echo "Initializing Terraform for Deployment"
-                echo "======================================="
+        stage('Verify Terraform Version') {
+            when {
+                expression {
+                    params.ACTION == 'APPLY'
+                }
+            }
+            steps {
+                dir("${TF_ROOT}") {
+                    sh '''
+                    echo "======================================="
+                    echo "Verifying Terraform Version"
+                    echo "======================================="
 
-                terraform init \
-                    -input=false \
-                    -reconfigure
-                '''
+                    echo
+                    echo "Terraform version used during validation:"
+                    cat artifacts/metadata/terraform-version.txt
+
+                    echo
+                    echo "Terraform version on deployment server:"
+                    terraform version
+
+                    PACKAGE_VERSION=$(grep "Terraform v" artifacts/metadata/terraform-version.txt | head -1 | awk '{print $2}')
+                    DEPLOY_VERSION=$(terraform version | head -1 | awk '{print $2}')
+
+                    echo
+                    echo "Validation Version : ${PACKAGE_VERSION}"
+                    echo "Deployment Version : ${DEPLOY_VERSION}"
+
+                    if [ "${PACKAGE_VERSION}" != "${DEPLOY_VERSION}" ]; then
+                        echo
+                        echo "ERROR: Terraform version validation FAILED"
+                        echo "Validation package created with ${PACKAGE_VERSION}"
+                        echo "Deployment server is using ${DEPLOY_VERSION}"
+                        exit 1
+                    fi
+
+                    echo
+                    echo "======================================="
+                    echo "Terraform version validation PASSED"
+                    echo "======================================="
+                    '''
+                }
             }
         }
-    }
 
-    stage('Verify Terraform Plan') {
-        steps {
-            dir("${TF_ROOT}") {
-                sh '''
-                echo "======================================="
-                echo "Verifying Approved Terraform Plan"
-                echo "======================================="
+        stage('Manual Approval') {
+            when {
+                expression {
+                    params.ACTION == 'APPLY'
+                }
+            }
+            steps {
+                script {
+                    input(
+                        id: 'TerraformApproval',
+                        message: """
+                        ==================================================
+                        Terraform Enterprise Deployment Approval
 
-                ls -lh artifacts/plans/
+                        Environment        : ${params.ENVIRONMENT}
+                        Validation Build   : ${params.VALIDATION_BUILD}
+                        Deployment Build   : ${env.BUILD_NUMBER}
+                        Job                : ${env.JOB_NAME}
+                        Terraform Plan     : ${env.TF_PLAN}
+                        ==================================================
 
-                terraform show artifacts/plans/${TF_PLAN} > /dev/null
+                        Have you reviewed the Terraform plan?
+                        Do you approve deployment?
 
-                echo
-                echo "Terraform plan verification PASSED"
-                '''
+                        ==================================================
+                        """,
+                        ok: 'Approve Deployment'
+                    )
+                    echo "Deployment approved by operator."
+                }
             }
         }
-    }
 
-    stage('Terraform Apply') {
-        steps {
-            dir("${TF_ROOT}") {
-                sh '''
-                mkdir -p artifacts/deployment
+        stage('Terraform Init') {
+            steps {
+                dir("${TF_ROOT}") {
+                    sh '''
+                    echo "======================================="
+                    echo "Initializing Terraform for Deployment"
+                    echo "======================================="
 
-                echo "======================================="
-                echo "Deploying Approved Infrastructure"
-                echo "======================================="
-
-                terraform apply \
-                    -input=false \
-                    -auto-approve \
-                    artifacts/plans/${TF_PLAN} \
-                    | tee artifacts/deployment/apply.log
-                '''
+                    terraform init \
+                        -input=false \
+                        -reconfigure
+                    '''
+                }
             }
         }
-    }
 
-    stage('Generate Deployment Report') {
-        steps {
-            dir("${TF_ROOT}") {
-                sh '''
-                mkdir -p artifacts/deployment
+        stage('Verify Terraform Plan') {
+            steps {
+                dir("${TF_ROOT}") {
+                    sh '''
+                    echo "======================================="
+                    echo "Verifying Approved Terraform Plan"
+                    echo "======================================="
 
-                echo "===================================================" > artifacts/deployment/deployment-report.txt
-                echo "Terraform Enterprise Deployment Report" >> artifacts/deployment/deployment-report.txt
-                echo "===================================================" >> artifacts/deployment/deployment-report.txt
+                    ls -lh artifacts/plans/
 
-                echo "Deployment Status : SUCCESS" >> artifacts/deployment/deployment-report.txt
-                echo "" >> artifacts/deployment/deployment-report.txt
+                    terraform show artifacts/plans/${TF_PLAN} > /dev/null
 
-                echo "Deployment Build  : ${BUILD_NUMBER}" >> artifacts/deployment/deployment-report.txt
-                echo "Validation Build  : ${VALIDATION_BUILD}" >> artifacts/deployment/deployment-report.txt
-                echo "Environment       : ${ENVIRONMENT}" >> artifacts/deployment/deployment-report.txt
-                echo "Terraform Plan    : ${TF_PLAN}" >> artifacts/deployment/deployment-report.txt
-
-                echo "" >> artifacts/deployment/deployment-report.txt
-
-                echo "Git Branch        : $(git rev-parse --abbrev-ref HEAD)" >> artifacts/deployment/deployment-report.txt
-                echo "Commit ID         : $(git rev-parse HEAD)" >> artifacts/deployment/deployment-report.txt
-                echo "Commit Message    : $(git log -1 --pretty=%s)" >> artifacts/deployment/deployment-report.txt
-                echo "Author            : $(git log -1 --pretty=%an)" >> artifacts/deployment/deployment-report.txt
-
-                echo "" >> artifacts/deployment/deployment-report.txt
-
-                echo "Terraform Version : $(terraform version | head -1)" >> artifacts/deployment/deployment-report.txt
-
-                echo "" >> artifacts/deployment/deployment-report.txt
-
-                echo "Deployment Time   : $(date)" >> artifacts/deployment/deployment-report.txt
-
-                echo "===================================================" >> artifacts/deployment/deployment-report.txt
-                cat artifacts/deployment/deployment-report.txt
-                '''
+                    echo
+                    echo "Terraform plan verification PASSED"
+                    '''
+                }
             }
         }
-    }
+
+        stage('Terraform Apply') {
+            steps {
+                dir("${TF_ROOT}") {
+                    sh '''
+                    mkdir -p artifacts/deployment
+
+                    echo "======================================="
+                    echo "Deploying Approved Infrastructure"
+                    echo "======================================="
+
+                    terraform apply \
+                        -input=false \
+                        -auto-approve \
+                        artifacts/plans/${TF_PLAN} \
+                        | tee artifacts/deployment/apply.log
+                    '''
+                }
+            }
+        }
+
+        stage('Generate Deployment Report') {
+            steps {
+                dir("${TF_ROOT}") {
+                    sh '''
+                    mkdir -p artifacts/deployment
+
+                    echo "===================================================" > artifacts/deployment/deployment-report.txt
+                    echo "Terraform Enterprise Deployment Report" >> artifacts/deployment/deployment-report.txt
+                    echo "===================================================" >> artifacts/deployment/deployment-report.txt
+
+                    echo "Deployment Status : SUCCESS" >> artifacts/deployment/deployment-report.txt
+                    echo "" >> artifacts/deployment/deployment-report.txt
+
+                    echo "Deployment Build  : ${BUILD_NUMBER}" >> artifacts/deployment/deployment-report.txt
+                    echo "Validation Build  : ${VALIDATION_BUILD}" >> artifacts/deployment/deployment-report.txt
+                    echo "Environment       : ${ENVIRONMENT}" >> artifacts/deployment/deployment-report.txt
+                    echo "Terraform Plan    : ${TF_PLAN}" >> artifacts/deployment/deployment-report.txt
+
+                    echo "" >> artifacts/deployment/deployment-report.txt
+
+                    echo "Git Branch        : $(git rev-parse --abbrev-ref HEAD)" >> artifacts/deployment/deployment-report.txt
+                    echo "Commit ID         : $(git rev-parse HEAD)" >> artifacts/deployment/deployment-report.txt
+                    echo "Commit Message    : $(git log -1 --pretty=%s)" >> artifacts/deployment/deployment-report.txt
+                    echo "Author            : $(git log -1 --pretty=%an)" >> artifacts/deployment/deployment-report.txt
+
+                    echo "" >> artifacts/deployment/deployment-report.txt
+
+                    echo "Terraform Version : $(terraform version | head -1)" >> artifacts/deployment/deployment-report.txt
+
+                    echo "" >> artifacts/deployment/deployment-report.txt
+
+                    echo "Deployment Time   : $(date)" >> artifacts/deployment/deployment-report.txt
+
+                    echo "===================================================" >> artifacts/deployment/deployment-report.txt
+                    cat artifacts/deployment/deployment-report.txt
+                    '''
+                }
+            }
+        }
 
     post {
         always {
