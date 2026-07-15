@@ -1,0 +1,123 @@
+pipeline {
+
+    agent any
+
+    options {
+        ansiColor('xterm')
+        timestamps()
+        timeout(time: 60, unit: 'MINUTES')
+        disableConcurrentBuilds()
+
+        buildDiscarder(logRotator(
+            numToKeepStr: '20',
+            artifactNumToKeepStr: '10'
+        ))
+    }
+
+    parameters {
+
+        choice(
+            name: 'ENVIRONMENT',
+            choices: ['dev', 'test', 'prod'],
+            description: 'Select deployment environment'
+        )
+
+        string(
+            name: 'VALIDATION_BUILD',
+            defaultValue: '',
+            description: 'Validation build number'
+        )
+
+        booleanParam(
+            name: 'AUTO_APPROVE',
+            defaultValue: false,
+            description: 'Skip approval (Dev only)'
+        )
+    }
+
+    environment {
+        TF_ROOT                 = 'infrastructure'
+        VALIDATION_JOB          = 'terraform-validation2'
+        AWS_ACCESS_KEY_ID       = credentials('AWS_ACCESS_KEY_ID')
+        AWS_SECRET_ACCESS_KEY   = credentials('AWS_SECRET_ACCESS_KEY')
+        AWS_DEFAULT_REGION      = 'ap-south-1'
+        TF_IN_AUTOMATION        = 'true'
+    }
+
+    stages {
+        stage('Initialize Deployment') {
+            steps {
+                echo "======================================"
+                echo "Terraform Enterprise Deployment"
+                echo "======================================"
+
+                echo "Environment       : ${ENVIRONMENT}"
+                echo "Validation Build  : ${VALIDATION_BUILD}"
+                echo "Deployment Build  : ${BUILD_NUMBER}"
+                echo "======================================"
+            }
+        }
+
+        stage('Prepare Deployment Workspace') {
+            steps {
+                sh '''
+                mkdir -p deployment-artifacts/plans
+                mkdir -p deployment-artifacts/metadata
+                mkdir -p deployment-artifacts/checksum
+                echo "Deployment workspace created."
+                pwd
+                '''
+            }
+        }
+
+        stage('Retrieve Approved Deployment Package') {
+            steps {
+                echo "Copying artifacts from Validation Build #${VALIDATION_BUILD}"
+                copyArtifacts(
+                    projectName: "${VALIDATION_JOB}",
+                    selector: specific("${VALIDATION_BUILD}"),
+                    filter: "infrastructure/artifacts/**",
+                    fingerprintArtifacts: true
+                )
+            }
+        }
+
+        stage('Verify Downloaded Artifacts') {
+            steps {
+                sh '''
+                echo "========================================"
+                echo "Downloaded Artifacts"
+                echo "========================================"
+                pwd
+                ls -R infrastructure/artifacts
+                '''
+            }
+        }
+        
+        stage('Manual Approval') {
+            steps {
+                echo "Will implement next..."
+            }
+        }
+
+        stage('Terraform Apply') {
+            steps {
+                echo "Will implement next..."
+            }
+        }
+
+        stage('Generate Deployment Report') {
+            steps {
+                echo "Will implement next..."
+            }
+        }
+
+    }
+
+    post {
+        always {
+            cleanWs()
+        }
+    }
+
+}
