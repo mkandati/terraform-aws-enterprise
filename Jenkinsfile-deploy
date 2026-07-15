@@ -289,12 +289,44 @@ pipeline {
         }
     }
 
-        stage('Generate Deployment Report') {
-            steps {
-                echo "Will implement next..."
+    stage('Generate Deployment Report') {
+        steps {
+            dir("${TF_ROOT}") {
+                sh '''
+                mkdir -p artifacts/deployment
+
+                echo "===================================================" > artifacts/deployment/deployment-report.txt
+                echo "Terraform Enterprise Deployment Report" >> artifacts/deployment/deployment-report.txt
+                echo "===================================================" >> artifacts/deployment/deployment-report.txt
+
+                echo "Deployment Status : SUCCESS" >> artifacts/deployment/deployment-report.txt
+                echo "" >> artifacts/deployment/deployment-report.txt
+
+                echo "Deployment Build  : ${BUILD_NUMBER}" >> artifacts/deployment/deployment-report.txt
+                echo "Validation Build  : ${VALIDATION_BUILD}" >> artifacts/deployment/deployment-report.txt
+                echo "Environment       : ${ENVIRONMENT}" >> artifacts/deployment/deployment-report.txt
+                echo "Terraform Plan    : ${TF_PLAN}" >> artifacts/deployment/deployment-report.txt
+
+                echo "" >> artifacts/deployment/deployment-report.txt
+
+                echo "Git Branch        : $(git rev-parse --abbrev-ref HEAD)" >> artifacts/deployment/deployment-report.txt
+                echo "Commit ID         : $(git rev-parse HEAD)" >> artifacts/deployment/deployment-report.txt
+                echo "Commit Message    : $(git log -1 --pretty=%s)" >> artifacts/deployment/deployment-report.txt
+                echo "Author            : $(git log -1 --pretty=%an)" >> artifacts/deployment/deployment-report.txt
+
+                echo "" >> artifacts/deployment/deployment-report.txt
+
+                echo "Terraform Version : $(terraform version | head -1)" >> artifacts/deployment/deployment-report.txt
+
+                echo "" >> artifacts/deployment/deployment-report.txt
+
+                echo "Deployment Time   : $(date)" >> artifacts/deployment/deployment-report.txt
+
+                echo "===================================================" >> artifacts/deployment/deployment-report.txt
+                cat artifacts/deployment/deployment-report.txt
+                '''
             }
         }
-
     }
 
     post {
