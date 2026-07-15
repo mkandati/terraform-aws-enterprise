@@ -1,0 +1,776 @@
+pipeline {
+
+    agent any
+
+    options {
+        ansiColor('xterm')
+        timestamps()
+        timeout(time: 60, unit: 'MINUTES')
+        disableConcurrentBuilds()
+
+        buildDiscarder(logRotator(
+            numToKeepStr: '20',
+            artifactNumToKeepStr: '10'
+        ))
+    }
+
+    parameters {
+
+        choice(
+            name: 'ACTION',
+            choices: ['APPLY', 'DESTROY'],
+            description: 'Terraform Operation'
+        )
+             
+        choice(
+            name: 'ENVIRONMENT',
+            choices: ['dev', 'test', 'prod'],
+            description: 'Select deployment environment'
+        )
+
+        string(
+            name: 'VALIDATION_BUILD',
+            defaultValue: '',
+            description: 'Validation build number'
+        )
+
+        booleanParam(
+            name: 'AUTO_APPROVE',
+            defaultValue: false,
+            description: 'Skip approval (Dev only)'
+        )
+    }
+
+    environment {
+
+        TF_ROOT               = 'infrastructure'
+        ENV_PATH              = "../environments/${params.ENVIRONMENT}"
+
+        VALIDATION_PIPELINE   = 'terraform-validation2'
+
+        AWS_ACCESS_KEY_ID     = credentials('AWS_ACCESS_KEY_ID')
+        AWS_SECRET_ACCESS_KEY = credentials('AWS_SECRET_ACCESS_KEY')
+        AWS_DEFAULT_REGION    = 'ap-south-1'
+
+        TF_IN_AUTOMATION      = 'true'
+    }
+
+    stages {
+        stage('Initialize Deployment') {
+            steps {
+                script {
+                    currentBuild.displayName = "#${env.BUILD_NUMBER} ${params.ENVIRONMENT.toUpperCase()} - ${params.ACTION}"
+                    currentBuild.description = "Terraform ${params.ACTION} for ${params.ENVIRONMENT}"
+                }
+
+                sh """
+                echo "==============================================="
+                echo " Terraform Enterprise Deployment Pipeline"
+                echo "==============================================="
+                echo " Action            : ${ACTION}"
+                echo " Environment       : ${ENVIRONMENT}"
+                echo " Validation Build  : ${VALIDATION_BUILD}"
+                echo " Deployment Build  : ${BUILD_NUMBER}"
+                echo " Job Name          : ${JOB_NAME}"
+                echo " Repository        : terraform-aws-enterprise"
+                echo "==============================================="
+                """
+            }
+        }
+        stage('Prepare Workspace') {
+            steps {
+                dir("${TF_ROOT}") {
+                    sh '''
+                    echo "======================================"
+                    echo "Preparing Deployment Workspace"
+                    echo "======================================"
+
+                    mkdir -p artifacts/plans
+                    mkdir -p artifacts/metadata
+                    mkdir -p artifacts/checksum
+                    mkdir -p artifacts/deployment
+
+                    echo ""
+                    echo "Workspace:"
+                    pwd
+
+                    echo ""
+                    echo "Artifacts Directory:"
+                    find artifacts -maxdepth 2 -type d
+
+                    echo ""
+                    echo "Workspace preparation completed."
+                    '''
+                }
+            }
+        }
+
+        stage('Deployment Decision') {
+            steps {
+                script {
+                echo """
+                    ==================================================
+                    Terraform Enterprise Deployment Decision
+                    ==================================================
+
+                    Action             : ${params.ACTION}
+                    Environment        : ${params.ENVIRONMENT}
+                    Deployment Build   : ${env.BUILD_NUMBER}
+                    Job Name           : ${env.JOB_NAME}
+
+                    ==================================================
+                    """
+                    if (params.ACTION == 'APPLY') {
+                        echo """
+                        Selected Operation : APPLY
+                        Validation Build   : ${params.VALIDATION_BUILD}
+
+                        This deployment will:
+
+                        ✓ Retrieve the approved deployment package
+                        ✓ Verify package integrity
+                        ✓ Verify environment
+                        ✓ Verify Terraform version
+                        ✓ Wait for manual approval
+                        ✓ Apply the approved Terraform plan
+                        ==================================================
+                    """
+                    } else {
+
+                    echo """
+                        Selected Operation : DESTROY
+
+                        This deployment will:
+
+                        ✓ Initialize Terraform
+                        ✓ Wait for destroy approval
+                        ✓ Destroy Terraform-managed infrastructure
+                        ✓ Generate destroy report
+                        ==================================================
+                    """
+                    }
+                }
+            }
+        }
+
+        stage('Retrieve Validation Artifacts') {
+            when {
+                expression {
+                params.ACTION == 'APPLY'
+                }
+            }
+            steps {
+                echo "Retrieving validation artifacts from Build #${VALIDATION_BUILD}"
+
+                copyArtifacts(
+                    projectName: "${VALIDATION_JOB}",
+                    selector: specific("${VALIDATION_BUILD}"),
+                    filter: "infrastructure/artifacts/**",
+                    fingerprintArtifacts: true
+                )
+
+                dir("${TF_ROOT}") {
+                    sh '''
+                    echo ""
+                    echo "======================================"
+                    echo "Retrieved Validation Artifacts"
+                    echo "======================================"
+
+                    find artifacts -type f
+
+                    echo ""
+                    echo "Terraform Plans:"
+                    ls -lh artifacts/plans
+
+                    echo ""
+                    echo "Total Files:"
+                    find artifacts -type f | wc -l
+                    '''
+                }
+            }
+        }
+
+        stage('Discover Terraform Plan') {
+            when {
+                expression { params.ACTION == 'APPLY' }
+            }
+            steps {
+                dir("${TF_ROOT}") {
+                    sh '''
+                    echo "Available Terraform Plans:"
+                    ls -lh artifacts/plans
+
+                    PLAN_COUNT=$(find artifacts/plans -maxdepth 1 -type f | wc -l)
+
+                    if [ "$PLAN_COUNT" -ne 1 ]; then
+                        echo ""
+                        echo "ERROR: Expected exactly one Terraform plan."
+                        exit 1
+                    fi
+                    '''
+
+                    script {
+                        env.TF_PLAN = sh(
+                            script: "basename artifacts/plans/*",
+                            returnStdout: true
+                        ).trim()
+
+                        echo """
+                        ======================================
+                        Terraform Plan Located
+                        ======================================
+
+                        Plan File : ${env.TF_PLAN}
+
+                        ======================================
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Verify Deployment Package Integrity') {
+            when {
+                expression { params.ACTION == 'APPLY' }
+            }
+            steps {
+                dir("${TF_ROOT}") {
+
+                    sh '''
+                    set -e
+                    set -o pipefail
+
+                    echo "======================================="
+                    echo "Deployment Package Integrity Verification"
+                    echo "======================================="
+
+                    echo ""
+                    echo "Terraform Plan : ${TF_PLAN}"
+
+                    echo ""
+                    echo "Stored SHA256 Checksum:"
+                    cat artifacts/checksum/SHA256SUM
+
+                    echo ""
+                    echo "Verifying checksum..."
+
+                    sha256sum --check artifacts/checksum/SHA256SUM
+
+                    echo ""
+                    echo "======================================="
+                    echo "Deployment package integrity verified."
+                    echo "======================================="
+                    '''
+                }
+            }
+        }
+
+        stage('Verify Deployment Environment') {
+            when {
+                expression { params.ACTION == 'APPLY' }
+            }
+            steps {
+                dir("${TF_ROOT}") {
+
+                    sh '''
+                    set -e
+                    set -o pipefail
+
+                    echo "======================================="
+                    echo "Verifying Deployment Environment"
+                    echo "======================================="
+
+                    echo ""
+                    echo "Requested Environment : ${ENVIRONMENT}"
+
+                    echo ""
+                    echo "Deployment Package Metadata"
+                    cat artifacts/metadata/environment.txt
+
+                    PACKAGE_ENVIRONMENT=$(grep "^Environment" artifacts/metadata/environment.txt | awk -F':' '{print $2}' | xargs)
+
+                    echo ""
+                    echo "Package Environment : ${PACKAGE_ENVIRONMENT}"
+
+                    if [ "${ENVIRONMENT}" != "${PACKAGE_ENVIRONMENT}" ]; then
+
+                        echo ""
+                        echo "ERROR: Environment validation FAILED"
+                        echo "Package Environment  : ${PACKAGE_ENVIRONMENT}"
+                        echo "Requested Environment: ${ENVIRONMENT}"
+                        exit 1
+
+                    fi
+
+                    echo ""
+                    echo "======================================="
+                    echo "Deployment environment verified."
+                    echo "======================================="
+                    '''
+                }
+            }
+        }
+
+        stage('Verify Terraform Version') {         
+            when {
+                expression { params.ACTION == 'APPLY' }
+            }
+            steps {
+                dir("${TF_ROOT}") {
+
+                    sh '''
+                    set -e
+                    set -o pipefail
+
+                    echo "======================================="
+                    echo "Verifying Terraform Version"
+                    echo "======================================="
+
+                    echo ""
+                    echo "Validation Terraform Version"
+                    cat artifacts/metadata/terraform-version.txt
+
+                    echo ""
+                    echo "Deployment Terraform Version"
+                    terraform version
+
+                    VALIDATION_TF_VERSION=$(grep "Terraform v" artifacts/metadata/terraform-version.txt | head -1 | awk '{print $2}')
+                    DEPLOYMENT_TF_VERSION=$(terraform version | head -1 | awk '{print $2}')
+
+                    echo ""
+                    echo "Validation Version : ${VALIDATION_TF_VERSION}"
+                    echo "Deployment Version : ${DEPLOYMENT_TF_VERSION}"
+
+                    if [ "${VALIDATION_TF_VERSION}" != "${DEPLOYMENT_TF_VERSION}" ]; then
+
+                        echo ""
+                        echo "ERROR: Terraform version validation FAILED"
+                        echo "Validation Version : ${VALIDATION_TF_VERSION}"
+                        echo "Deployment Version : ${DEPLOYMENT_TF_VERSION}"
+                        exit 1
+
+                    fi
+
+                    echo ""
+                    echo "======================================="
+                    echo "Terraform version verified."
+                    echo "======================================="
+                    '''
+                }
+            }
+        }
+
+        stage('Manual Approval') {
+            when {
+                expression { params.ACTION == 'APPLY' }
+            }
+            steps {
+                script {
+
+                    if (params.AUTO_APPROVE && params.ENVIRONMENT == 'dev') {
+                        echo "AUTO_APPROVE enabled for DEV environment."
+                        return
+                    }
+
+                    def approver = input(
+                        id: 'TerraformApproval',
+                        message: """
+                        ==================================================
+                        Terraform Enterprise Deployment Approval
+                        ==================================================
+
+                        Action             : ${params.ACTION}
+                        Environment        : ${params.ENVIRONMENT}
+                        Validation Build   : ${params.VALIDATION_BUILD}
+                        Deployment Build   : ${env.BUILD_NUMBER}
+                        Job Name           : ${env.JOB_NAME}
+                        Terraform Plan     : ${env.TF_PLAN}
+                        ==================================================
+
+                        Please verify that:
+
+                        ✓ The Terraform plan has been reviewed.
+                        ✓ The deployment target is correct.
+                        ✓ All required approvals have been obtained.
+
+                        Do you approve this deployment?
+                        ==================================================
+                        """,
+                        ok: 'Approve Deployment',
+                        submitterParameter: 'APPROVER'
+                    )
+
+                    env.DEPLOY_APPROVER = approver
+                    echo "Deployment approved by ${approver}"
+                }
+            }
+        }
+
+        stage('Destroy Approval') {
+            when {
+                expression { params.ACTION == 'DESTROY' }
+            }
+            steps {
+                script {
+                    def approver = input(
+                        message: """
+                        ==================================================
+                        Terraform Enterprise Destroy Approval
+                        ==================================================
+
+                        Environment        : ${ENVIRONMENT}
+                        Deployment Build   : ${BUILD_NUMBER}
+                        Job Name           : ${JOB_NAME}
+                        Terraform State    : ${ENVIRONMENT}/terraform.tfstate
+                        ==================================================
+
+                        WARNING
+
+                        This action will permanently destroy all
+                        Terraform-managed infrastructure for
+                        '${ENVIRONMENT}'.
+
+                        This operation cannot be undone.
+                        Resources will be removed from AWS immediately.
+                        ==================================================
+
+                        Please verify:
+
+                        ✓ This is the correct environment
+                        ✓ Resources are no longer required
+                        ✓ Terraform state has been verified
+                        ==================================================
+
+                        Proceed with DESTROY?
+
+                        """,
+
+                        ok: "Destroy Infrastructure",
+                        submitterParameter: "APPROVER"
+                    )
+
+                    env.DESTROY_APPROVER = approver
+                    echo "Destroy approved by ${approver}"
+                }
+            }
+        }
+
+        stage('Terraform Init') {
+            steps {
+                dir("${TF_ROOT}") {
+                    sh '''
+                    set -e
+                    set -o pipefail
+
+                    echo "======================================="
+                    echo "Initializing Terraform"
+                    echo "======================================="
+
+                    echo ""
+                    echo "Action      : ${ACTION}"
+                    echo "Environment : ${ENVIRONMENT}"
+
+                    echo ""
+                    echo "Backend Configuration"
+
+                    grep bucket ../environments/${ENVIRONMENT}/backend.tf
+                    grep key ../environments/${ENVIRONMENT}/backend.tf
+
+                    echo ""
+                    terraform version | head -1
+
+                    echo ""
+                    terraform init \
+                        -input=false \
+                        -reconfigure
+
+                    echo ""
+                    echo "======================================="
+                    echo "Terraform initialization completed."
+                    echo "======================================="
+                    '''
+                }
+            }
+        }
+
+        stage('Verify Terraform Backend') {
+            when {
+                expression { params.ACTION == 'DESTROY' }
+            }
+            steps {
+                dir("${TF_ROOT}") {
+                    sh '''
+                    set -e
+                    set -o pipefail
+
+                    echo "======================================="
+                    echo "Terraform Backend Verification"
+                    echo "======================================="
+
+                    echo ""
+                    echo "Selected Environment : ${ENVIRONMENT}"
+
+                    echo ""
+                    echo "Backend Configuration"
+                    grep bucket ../environments/${ENVIRONMENT}/backend.tf
+                    grep key ../environments/${ENVIRONMENT}/backend.tf
+                    grep region ../environments/${ENVIRONMENT}/backend.tf
+
+                    echo ""
+                    echo "Terraform State Resources"
+
+                    RESOURCE_COUNT=$(terraform state list | tee /tmp/state.txt | wc -l)
+
+                    echo ""
+                    echo "Resources Found : ${RESOURCE_COUNT}"
+
+                    cat /tmp/state.txt
+
+                    if [ "${RESOURCE_COUNT}" -eq 0 ]; then
+                        echo ""
+                        echo "ERROR: No Terraform resources found in backend."
+                        exit 1
+                    fi
+
+                    echo ""
+                    echo "======================================="
+                    echo "Backend verification completed."
+                    echo "======================================="
+                    '''
+                }
+            }
+        }
+
+        stage('Verify Terraform Plan') {
+            when {
+                expression { params.ACTION == 'APPLY' }
+            }
+            steps {
+                dir("${TF_ROOT}") {
+
+                    sh '''
+                    set -e
+                    set -o pipefail
+
+                    echo "======================================="
+                    echo "Verifying Approved Terraform Plan"
+                    echo "======================================="
+
+                    echo ""
+                    echo "Terraform Plan : ${TF_PLAN}"
+
+                    terraform show artifacts/plans/${TF_PLAN} > /dev/null
+
+                    echo ""
+                    echo "======================================="
+                    echo "Approved Terraform plan verified."
+                    echo "======================================="
+                    '''
+                }
+            }
+        }
+
+        stage('Terraform Apply') {
+            when {
+                expression { params.ACTION == 'APPLY' }
+            }
+            steps {
+                dir("${TF_ROOT}") {
+                    sh '''
+                    set -e
+                    set -o pipefail
+
+                    mkdir -p artifacts/deployment
+
+                    echo "======================================="
+                    echo "Deploying Approved Infrastructure"
+                    echo "======================================="
+
+                    echo ""
+                    echo "Environment      : ${ENVIRONMENT}"
+                    echo "Terraform Plan   : ${TF_PLAN}"
+                    echo "Deployment Build : ${BUILD_NUMBER}"
+                    echo "Start Time       : $(date)"
+
+                    terraform apply \
+                        -input=false \
+                        -auto-approve \
+                        artifacts/plans/${TF_PLAN} \
+                        | tee artifacts/deployment/apply.log
+
+                    terraform output > artifacts/deployment/terraform-outputs.txt
+
+                    echo ""
+                    echo "Finish Time      : $(date)"
+
+                    echo ""
+                    echo "======================================="
+                    echo "Terraform deployment completed."
+                    echo "======================================="
+                    '''
+                }
+            }
+        }
+
+        stage('Terraform Destroy') {
+            when {
+                expression { params.ACTION == 'DESTROY' }
+            }
+            steps {
+                dir("${TF_ROOT}") {
+                    sh '''
+                    set -e
+                    set -o pipefail
+
+                    mkdir -p artifacts/deployment
+
+                    echo "======================================="
+                    echo "Destroying Terraform Infrastructure"
+                    echo "======================================="
+
+                    echo ""
+                    echo "Action           : DESTROY"
+                    echo "Environment      : ${ENVIRONMENT}"
+                    echo "Deployment Build : ${BUILD_NUMBER}"
+                    echo "Start Time       : $(date)"
+
+                    echo ""
+                    echo "Backend State"
+                    grep key ../environments/${ENVIRONMENT}/backend.tf
+
+                    terraform destroy \
+                        -input=false \
+                        -auto-approve \
+                        -var-file=../environments/${ENVIRONMENT}/terraform.tfvars \
+                        | tee artifacts/deployment/destroy.log
+
+                    echo ""
+                    REMAINING=$(terraform state list | wc -l)
+
+                    if [ "${REMAINING}" -eq 0 ]; then
+                        echo "Terraform state is empty."
+                    else
+                        echo "WARNING: ${REMAINING} resources remain in Terraform state."
+                        terraform state list
+                    fi
+
+                    echo ""
+                    echo "Finish Time : $(date)"
+
+                    echo ""
+                    echo "======================================="
+                    echo "Terraform destroy completed."
+                    echo "======================================="
+                    '''
+                }
+            }
+        }
+
+        stage('Generate Deployment Report') {
+            when {
+                expression {
+                params.ACTION == 'APPLY'
+                }
+            }
+            steps {
+                dir("${TF_ROOT}") {
+                    sh '''
+                    set -e
+
+                    mkdir -p artifacts/deployment
+
+                    REPORT=artifacts/deployment/deployment-report.txt
+
+                    echo "===================================================" > ${REPORT}
+                    echo "Terraform Enterprise Deployment Report" >> ${REPORT}
+                    echo "===================================================" >> ${REPORT}
+                    echo "" >> ${REPORT}
+
+                    echo "Deployment Information" >> ${REPORT}
+                    echo "---------------------------------------------------" >> ${REPORT}
+                    echo "Deployment Status : SUCCESS" >> ${REPORT}
+                    echo "Deployment Build  : ${BUILD_NUMBER}" >> ${REPORT}
+                    echo "Validation Build  : ${VALIDATION_BUILD}" >> ${REPORT}
+                    echo "Environment       : ${ENVIRONMENT}" >> ${REPORT}
+                    echo "Terraform Plan    : ${TF_PLAN}" >> ${REPORT}
+                    echo "" >> ${REPORT}
+
+                    echo "Git Information" >> ${REPORT}
+                    echo "---------------------------------------------------" >> ${REPORT}
+                    echo "Branch            : $(git rev-parse --abbrev-ref HEAD)" >> ${REPORT}
+                    echo "Commit ID         : $(git rev-parse HEAD)" >> ${REPORT}
+                    echo "Commit Message    : $(git log -1 --pretty=%s)" >> ${REPORT}
+                    echo "Author            : $(git log -1 --pretty=%an)" >> ${REPORT}
+                    echo "" >> ${REPORT}
+
+                    echo "Terraform Information" >> ${REPORT}
+                    echo "---------------------------------------------------" >> ${REPORT}
+                    echo "Terraform Version : $(terraform version | head -1)" >> ${REPORT}
+                    echo "AWS Region        : ${AWS_DEFAULT_REGION}" >> ${REPORT}
+                    echo "" >> ${REPORT}
+
+                    echo "Backend Information" >> ${REPORT}
+                    echo "---------------------------------------------------" >> ${REPORT}
+                    grep "bucket" ../environments/${ENVIRONMENT}/backend.tf >> ${REPORT}
+                    grep "key" ../environments/${ENVIRONMENT}/backend.tf >> ${REPORT}
+                    grep "region" ../environments/${ENVIRONMENT}/backend.tf >> ${REPORT}
+                    echo "" >> ${REPORT}
+
+                    echo "Terraform Outputs" >> ${REPORT}
+                    echo "---------------------------------------------------" >> ${REPORT}
+
+                    terraform output >> ${REPORT}
+
+                    echo "" >> ${REPORT}
+
+                    echo "Deployment Time" >> ${REPORT}
+                    echo "---------------------------------------------------" >> ${REPORT}
+                    echo "$(date)" >> ${REPORT}
+                    echo "" >> ${REPORT}
+
+                    echo "===================================================" >> ${REPORT}
+
+                    echo
+                    echo "Deployment Report"
+                    echo "---------------------------------------------------"
+
+                    cat ${REPORT}
+                    '''
+                }
+
+                archiveArtifacts(
+                    artifacts: 'infrastructure/artifacts/deployment/**',
+                    fingerprint: true
+                )
+            }
+        }
+    }
+    post {
+        success {
+            echo '''
+            ===================================================
+            Terraform Deployment Pipeline Completed Successfully
+            ===================================================
+            '''
+        }
+
+        failure {
+            echo '''
+            ===================================================
+            Terraform Deployment Pipeline Failed
+            ===================================================
+            '''
+        }
+
+        always {
+            echo "Cleaning Jenkins workspace..."
+
+            cleanWs(
+                deleteDirs: true,
+                disableDeferredWipeout: true
+            )
+
+            echo "Workspace cleanup completed."
+        }
+    }
+}
