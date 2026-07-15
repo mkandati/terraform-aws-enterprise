@@ -155,10 +155,25 @@ pipeline {
 
                 terraform show ${TF_PLAN} > artifacts/metadata/plan-summary.txt
                 sha256sum ${TF_PLAN} > artifacts/checksum/SHA256SUM
+
+                echo "=================================="
+                echo "Verify Generated Artifacts"
+                echo "=================================="
+
+                pwd
+
+                echo "--- Plans ---"
+                ls -la artifacts/plans
+
+                echo "--- Metadata ---"
+                ls -la artifacts/metadata
+
+                echo "--- Checksum ---"
+                ls -la artifacts/checksum
                 '''
+                }
             }
         }
-    }
 
         stage('Archive Terraform Plan') {
             when {
