@@ -234,6 +234,22 @@ pipeline {
         }
     }
 
+    stage('Terraform Init') {
+        steps {
+            dir("${TF_ROOT}") {
+                sh '''
+                echo "======================================="
+                echo "Initializing Terraform for Deployment"
+                echo "======================================="
+
+                terraform init \
+                    -input=false \
+                    -reconfigure
+                '''
+            }
+        }
+    }
+
         stage('Terraform Apply') {
             steps {
                 echo "Will implement next..."
