@@ -147,7 +147,7 @@ pipeline {
                 echo "Commit    : $(git log -1 --pretty=%s)" >> artifacts/metadata/git-info.txt
                 echo "Author    : $(git log -1 --pretty=%an)" >> artifacts/metadata/git-info.txt
 
-                terraform version > artifacts/metadata/terraform-version.txt
+                terraform version | head -1 > artifacts/metadata/terraform-version.txt
 
                 echo "Environment : ${ENVIRONMENT}" > artifacts/metadata/environment.txt
                 echo "Terraform Root : ${TF_ROOT}" >> artifacts/metadata/environment.txt
