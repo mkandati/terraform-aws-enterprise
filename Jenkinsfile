@@ -168,7 +168,9 @@ pipeline {
             steps {
                 echo "Archiving Terraform execution plan..."
                 archiveArtifacts(
-                    artifacts: 'infrastructure/artifacts/plans/**',
+                    echo "===== Artifact Structure ====="
+                    ls -R artifacts
+                    artifacts: 'infrastructure/artifacts/**',
                     fingerprint: true
                 )
             }
